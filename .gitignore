@@ -1,0 +1,14 @@
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore the configuration file with secrets
+config.py
+
+# Ignore the database file
+*.db
+*.db-journal
+
+# Ignore ngrok binary if it gets downloaded here
+ngrok
+ngrok.exe
