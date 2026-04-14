@@ -2,14 +2,28 @@
 from . import db
 from datetime import datetime
 
+class WebexChannel(db.Model):
+    """
+    Represents a Webex room/channel saved by the user.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), unique=True, nullable=False)
+    room_id = db.Column(db.String(256), unique=True, nullable=False)
+    jobs = db.relationship('ScheduledJob', backref='channel', lazy=True, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f'<WebexChannel {self.name}>'
+
 class ScheduledJob(db.Model):
     """
     Represents a scheduled message job defined by the user.
     """
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False)
-    room_id = db.Column(db.String(256), nullable=False)
     message = db.Column(db.Text, nullable=False)
+    
+    # Foreign Key to WebexChannel
+    channel_id = db.Column(db.Integer, db.ForeignKey('webex_channel.id'), nullable=False)
     
     # Schedule properties
     schedule_time = db.Column(db.String(5), nullable=False) # e.g., "09:00"
