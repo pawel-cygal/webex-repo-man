@@ -1,4 +1,14 @@
+# Webex
 webexteamssdk
-flask
+
+# Flask and Web Framework
+Flask
+Flask-SQLAlchemy
+Flask-WTF
+gunicorn
+
+# Scheduler
 schedule
-pyngrok
+
+# Utilities
+python-dotenv

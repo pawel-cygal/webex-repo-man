@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  webex-bot:
+    build: .
+    container_name: webex_repo_man_bot
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount the entire project directory into the container.
+      # This allows for live-reloading of code during development.
+      # Any change on the host machine will be immediately reflected in the container.
+      - .:/usr/src/app
+    restart: unless-stopped
+    # The following line allows you to use a .env file for environment variables,
+    # which is a good practice for managing secrets and configurations.
+    # We are currently using config.py, but this is here for future flexibility.
+    # env_file:
+    #   - .env
+
