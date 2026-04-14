@@ -2,8 +2,8 @@
 import time
 import schedule
 from webexteamssdk import WebexTeamsAPI
-from app import db
-from app.models import ScheduledJob
+from .. import db
+from ..models import ScheduledJob
 
 def send_scheduled_message(app, job_id):
     """

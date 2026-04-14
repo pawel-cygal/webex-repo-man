@@ -1,7 +1,7 @@
 # app/main/routes.py
 from . import main
 from flask import render_template
-from app.models import ScheduledJob
+from ..models import ScheduledJob
 
 @main.route('/')
 def index():

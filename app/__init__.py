@@ -22,7 +22,7 @@ def create_app(config_class=Config):
     db.init_app(app)
 
     # Register blueprints
-    from app.main.routes import main as main_blueprint
+    from .main.routes import main as main_blueprint
     app.register_blueprint(main_blueprint)
 
     # In the future, to enable webhooks, we would uncomment the following:
@@ -34,7 +34,7 @@ def create_app(config_class=Config):
         db.create_all()
 
     # Start the background scheduler
-    from app.scheduler.jobs import run_scheduler
+    from .scheduler.jobs import run_scheduler
     scheduler_thread = threading.Thread(target=run_scheduler, args=(app,))
     scheduler_thread.daemon = True
     scheduler_thread.start()
