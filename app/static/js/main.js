@@ -99,6 +99,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(err => showAlert('An unexpected error occurred.', 'danger'));
         }
 
+        // Handle Clone Job
+        if (form.matches('.clone-job-form')) {
+            event.preventDefault();
+            fetch(form.action, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        addJobRow(data.job);
+                        showAlert(data.message, 'success');
+                    } else { showAlert(data.message, 'danger'); }
+                })
+                .catch(err => showAlert('An unexpected error occurred.', 'danger'));
+        }
+
         // Handle Delete Channel
         if (form.matches('.delete-channel-form')) {
             event.preventDefault();
@@ -133,6 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="btn-group">
                     <form action="${job.urls.run_now}" method="POST" class="d-inline run-now-form"><button type="submit" class="btn btn-sm btn-outline-secondary" title="Run Now"><i class="bi bi-play-fill"></i></button></form>
                     <a href="${job.urls.edit}" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil"></i></a>
+                    <form action="${job.urls.clone}" method="POST" class="d-inline clone-job-form"><button type="submit" class="btn btn-sm btn-outline-info" title="Clone"><i class="bi bi-files"></i></button></form>
                     <form action="${job.urls.delete}" method="POST" class="d-inline delete-job-form"><button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button></form>
                 </div>
             </td>

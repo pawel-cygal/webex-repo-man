@@ -152,6 +152,36 @@ def delete_job(job_id):
         current_app.logger.error(f"Error deleting job: {e}")
         return jsonify({'success': False, 'message': 'Error deleting job. Check logs for details.'}), 500
 
+@main.route('/clone_job/<int:job_id>', methods=['POST'])
+def clone_job(job_id):
+    """
+    Creates a copy of an existing job (inactive by default).
+    """
+    source = ScheduledJob.query.get_or_404(job_id)
+    try:
+        copy = ScheduledJob(
+            name=f"{source.name} (copy)",
+            channel_id=source.channel_id,
+            message=source.message,
+            frequency=source.frequency,
+            schedule_time=source.schedule_time,
+            timezone=source.timezone,
+            mentions=source.mentions,
+            is_active=False,
+        )
+        db.session.add(copy)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f"Job '{source.name}' cloned. Review and activate the copy.",
+            'job': copy.to_dict()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error cloning job '{source.name}': {e}")
+        return jsonify({'success': False, 'message': 'Error cloning job. Check logs for details.'}), 500
+
+
 @main.route('/run_now/<int:job_id>', methods=['POST'])
 def run_now(job_id):
     """

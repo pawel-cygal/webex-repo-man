@@ -66,6 +66,7 @@ class ScheduledJob(db.Model):
             'urls': {
                 'run_now': url_for('main.run_now', job_id=self.id),
                 'edit': url_for('main.edit_job', job_id=self.id),
-                'delete': url_for('main.delete_job', job_id=self.id)
+                'delete': url_for('main.delete_job', job_id=self.id),
+                'clone': url_for('main.clone_job', job_id=self.id)
             }
         }
