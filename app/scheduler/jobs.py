@@ -26,10 +26,12 @@ def send_scheduled_message(app, job_id):
             
             message_to_send = job.message
             if job.mentions:
-                # Simple mention implementation, may need to be more robust
-                mentioned_emails = [email.strip() for email in job.mentions.split(',')]
-                for email in mentioned_emails:
-                    message_to_send += f" <@personEmail:{email}|>"
+                tokens = [t.strip() for t in job.mentions.split(',') if t.strip()]
+                for token in tokens:
+                    if token.lower() == 'all':
+                        message_to_send += " <@all>"
+                    else:
+                        message_to_send += f" <@personEmail:{token}|>"
 
             api.messages.create(roomId=job.channel.room_id, markdown=message_to_send)
             

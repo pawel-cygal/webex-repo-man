@@ -63,7 +63,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="mentions" class="form-label">Mentions (Optional)</label>
-                        <input type="text" class="form-control" id="mentions" name="mentions" value="{{ job.mentions or '' }}" placeholder="Comma-separated emails">
+                        <input type="text" class="form-control" id="mentions" name="mentions" value="{{ job.mentions or '' }}" placeholder="Comma-separated emails, or 'all' for @all">
                     </div>
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="is_active" name="is_active" {% if job.is_active %}checked{% endif %}>
