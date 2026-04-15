@@ -1,13 +1,10 @@
 # app/__init__.py
 import os
-import threading
-import time
 import logging
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-import schedule
 from .config import Config
 
 # Initialize extensions
@@ -36,10 +33,8 @@ def create_app(config_class=Config):
     # from app.webhook.routes import webhook as webhook_blueprint
     # app.register_blueprint(webhook_blueprint)
 
-    # Start the background scheduler
-    from .scheduler.jobs import run_scheduler
-    scheduler_thread = threading.Thread(target=run_scheduler, args=(app,))
-    scheduler_thread.daemon = True
-    scheduler_thread.start()
+    # Start the background scheduler (APScheduler)
+    from .scheduler.jobs import start_scheduler
+    start_scheduler(app)
 
     return app

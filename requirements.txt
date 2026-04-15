@@ -9,7 +9,7 @@ Flask-Migrate
 gunicorn
 
 # Scheduler
-schedule
+APScheduler
 
 # Utilities
 python-dotenv

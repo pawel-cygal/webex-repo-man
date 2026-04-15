@@ -1,17 +1,20 @@
 # app/scheduler/jobs.py
-import time
-import schedule
-from functools import partial
+from datetime import datetime
+import pytz
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from webexteamssdk import WebexTeamsAPI
 from .. import db
 from ..models import ScheduledJob
-from datetime import datetime
-import pytz
+
+_scheduler = None
+RECONCILE_JOB_ID = '_reconcile'
+
 
 def send_scheduled_message(app, job_id):
     """
     Fetches a job by its ID and sends the message to Webex.
-    This function runs within the Flask application context.
+    Runs inside the Flask application context.
     """
     with app.app_context():
         app.logger.info(f"Running job ID: {job_id}")
@@ -21,9 +24,8 @@ def send_scheduled_message(app, job_id):
             return
 
         try:
-            # Initialize API with the token from config
             api = WebexTeamsAPI(access_token=app.config['WEBEX_BOT_TOKEN'])
-            
+
             message_to_send = job.message
             if job.mentions:
                 tokens = [t.strip() for t in job.mentions.split(',') if t.strip()]
@@ -34,67 +36,78 @@ def send_scheduled_message(app, job_id):
                         message_to_send += f" <@personEmail:{token}|>"
 
             api.messages.create(roomId=job.channel.room_id, markdown=message_to_send)
-            
-            # Update last_run timestamp
+
             job.last_run = datetime.utcnow()
             db.session.commit()
-            
+
             app.logger.info(f"Successfully sent message for job: {job.name}")
-            
+
         except Exception as e:
             app.logger.error(f"Error sending message for job {job.id}: {e}")
 
 
-def run_scheduler(app):
-    """
-    The main scheduler loop that runs in a background thread.
-    """
-    app.logger.info("Scheduler thread started.")
-    
-    # This loop will periodically re-read the jobs from the database
-    # and update the schedule. This allows for dynamic updates without restarting the app.
-    while True:
-        with app.app_context():
-            try:
-                # Clear previous schedule
-                schedule.clear()
+def _build_trigger(job):
+    hour, minute = map(int, job.schedule_time.split(':'))
+    day_of_week = '*' if job.frequency == 'daily' else job.frequency[:3]
+    return CronTrigger(
+        day_of_week=day_of_week,
+        hour=hour,
+        minute=minute,
+        timezone=pytz.timezone(job.timezone),
+    )
 
-                # Get all active jobs from the database
-                jobs = ScheduledJob.query.filter_by(is_active=True).all()
-                
-                local_tz = datetime.now().astimezone().tzinfo
 
-                for job in jobs:
-                    # Create a timezone-aware datetime object for the job's scheduled time
-                    user_tz = pytz.timezone(job.timezone)
-                    hour, minute = map(int, job.schedule_time.split(':'))
-                    
-                    # Create a naive datetime, then localize it
-                    now_in_user_tz = datetime.now(user_tz)
-                    target_time_user_tz = now_in_user_tz.replace(hour=hour, minute=minute, second=0, microsecond=0)
+def _reconcile(app):
+    """Sync APScheduler state to match active jobs in the database."""
+    with app.app_context():
+        try:
+            jobs = ScheduledJob.query.filter_by(is_active=True).all()
+            desired_ids = set()
 
-                    # Convert to server's local time
-                    target_time_local = target_time_user_tz.astimezone(local_tz)
-                    schedule_time_str = target_time_local.strftime('%H:%M')
+            for job in jobs:
+                sched_id = f"job_{job.id}"
+                desired_ids.add(sched_id)
+                _scheduler.add_job(
+                    send_scheduled_message,
+                    trigger=_build_trigger(job),
+                    args=[app, job.id],
+                    id=sched_id,
+                    name=job.name,
+                    replace_existing=True,
+                    misfire_grace_time=3600,
+                )
 
-                    # Use partial to pass arguments to the job function
-                    job_func = partial(send_scheduled_message, app=app, job_id=job.id)
-                    
-                    # Schedule the job based on its frequency
-                    if job.frequency == 'daily':
-                        schedule.every().day.at(schedule_time_str).do(job_func)
-                    else:
-                        # For 'monday', 'tuesday', etc.
-                        getattr(schedule.every(), job.frequency).at(schedule_time_str).do(job_func)
-                
-                app.logger.info(f"Scheduler updated. {len(jobs)} jobs loaded.")
+            for sched_job in _scheduler.get_jobs():
+                if sched_job.id == RECONCILE_JOB_ID:
+                    continue
+                if sched_job.id not in desired_ids:
+                    _scheduler.remove_job(sched_job.id)
 
-            except Exception as e:
-                app.logger.error(f"Error loading jobs into scheduler: {e}")
+            app.logger.info(f"Scheduler reconciled. {len(jobs)} active job(s) loaded.")
 
-        # Run any pending jobs
-        schedule.run_pending()
-        
-        # Wait for a while before re-loading the schedule.
-        # This determines how often the app checks for new/updated jobs.
-        time.sleep(60)
+        except Exception as e:
+            app.logger.error(f"Error reconciling scheduler: {e}")
+
+
+def start_scheduler(app):
+    """Initialize APScheduler and start the reconciliation loop."""
+    global _scheduler
+    if _scheduler is not None:
+        return _scheduler
+
+    _scheduler = BackgroundScheduler(timezone=pytz.UTC)
+    _scheduler.start()
+
+    _scheduler.add_job(
+        _reconcile,
+        trigger='interval',
+        seconds=60,
+        args=[app],
+        id=RECONCILE_JOB_ID,
+        replace_existing=True,
+    )
+
+    _reconcile(app)
+
+    app.logger.info("APScheduler started.")
+    return _scheduler
