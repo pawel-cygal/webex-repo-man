@@ -1,8 +1,10 @@
 # app/main/routes.py
+import pytz
 from . import main
-from flask import render_template, request, redirect, url_for, flash
+from flask import render_template, request, redirect, url_for, flash, current_app
 from .. import db
 from ..models import ScheduledJob, WebexChannel
+from ..scheduler.jobs import send_scheduled_message
 
 @main.route('/')
 def index():
@@ -11,7 +13,8 @@ def index():
     """
     jobs = ScheduledJob.query.order_by(ScheduledJob.created_at.desc()).all()
     channels = WebexChannel.query.order_by(WebexChannel.name).all()
-    return render_template('index.html', jobs=jobs, channels=channels)
+    timezones = pytz.common_timezones
+    return render_template('index.html', jobs=jobs, channels=channels, timezones=timezones)
 
 @main.route('/add_channel', methods=['POST'])
 def add_channel():
@@ -32,7 +35,8 @@ def add_channel():
         flash(f"Channel '{name}' added successfully!", 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error adding channel: {e}', 'danger')
+        current_app.logger.error(f"Error adding channel: {e}")
+        flash('Error adding channel. Check logs for details.', 'danger')
         
     return redirect(url_for('main.index'))
 
@@ -48,7 +52,8 @@ def delete_channel(channel_id):
         flash(f"Channel '{channel.name}' and all its jobs have been deleted.", 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error deleting channel: {e}', 'danger')
+        current_app.logger.error(f"Error deleting channel: {e}")
+        flash('Error deleting channel. Check logs for details.', 'danger')
 
     return redirect(url_for('main.index'))
 
@@ -63,6 +68,7 @@ def add_job():
         message = request.form.get('message')
         frequency = request.form.get('frequency')
         schedule_time = request.form.get('schedule_time')
+        timezone = request.form.get('timezone')
         mentions = request.form.get('mentions')
 
         new_job = ScheduledJob(
@@ -71,6 +77,7 @@ def add_job():
             message=message,
             frequency=frequency,
             schedule_time=schedule_time,
+            timezone=timezone,
             mentions=mentions,
             is_active=True
         )
@@ -79,9 +86,40 @@ def add_job():
         flash('Job added successfully!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error adding job: {e}', 'danger')
+        current_app.logger.error(f"Error adding job: {e}")
+        flash('Error adding job. Check logs for details.', 'danger')
         
     return redirect(url_for('main.index'))
+
+@main.route('/edit_job/<int:job_id>', methods=['GET', 'POST'])
+def edit_job(job_id):
+    """
+    Handles editing of an existing job.
+    """
+    job = ScheduledJob.query.get_or_404(job_id)
+    channels = WebexChannel.query.order_by(WebexChannel.name).all()
+    timezones = pytz.common_timezones
+
+    if request.method == 'POST':
+        try:
+            job.name = request.form.get('name')
+            job.channel_id = request.form.get('channel_id')
+            job.message = request.form.get('message')
+            job.frequency = request.form.get('frequency')
+            job.schedule_time = request.form.get('schedule_time')
+            job.timezone = request.form.get('timezone')
+            job.mentions = request.form.get('mentions')
+            job.is_active = 'is_active' in request.form
+
+            db.session.commit()
+            flash('Job updated successfully!', 'success')
+            return redirect(url_for('main.index'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error editing job: {e}")
+            flash('Error editing job. Check logs for details.', 'danger')
+
+    return render_template('edit_job.html', job=job, channels=channels, timezones=timezones)
 
 @main.route('/delete_job/<int:job_id>', methods=['POST'])
 def delete_job(job_id):
@@ -95,6 +133,24 @@ def delete_job(job_id):
         flash('Job deleted successfully!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error deleting job: {e}', 'danger')
+        current_app.logger.error(f"Error deleting job: {e}")
+        flash('Error deleting job. Check logs for details.', 'danger')
 
+    return redirect(url_for('main.index'))
+
+@main.route('/run_now/<int:job_id>', methods=['POST'])
+def run_now(job_id):
+    """
+    Manually triggers a job to run immediately.
+    """
+    job = ScheduledJob.query.get_or_404(job_id)
+    try:
+        # We need the app object to pass to the function
+        app = current_app._get_current_object()
+        send_scheduled_message(app, job.id)
+        flash(f"Job '{job.name}' was triggered successfully!", 'success')
+    except Exception as e:
+        current_app.logger.error(f"Error running job '{job.name}' manually: {e}")
+        flash(f"Error running job '{job.name}'. Check logs for details.", 'danger')
+    
     return redirect(url_for('main.index'))

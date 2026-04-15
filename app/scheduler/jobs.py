@@ -5,6 +5,8 @@ from functools import partial
 from webexteamssdk import WebexTeamsAPI
 from .. import db
 from ..models import ScheduledJob
+from datetime import datetime
+import pytz
 
 def send_scheduled_message(app, job_id):
     """
@@ -12,10 +14,10 @@ def send_scheduled_message(app, job_id):
     This function runs within the Flask application context.
     """
     with app.app_context():
-        print(f"Running job ID: {job_id}")
+        app.logger.info(f"Running job ID: {job_id}")
         job = ScheduledJob.query.get(job_id)
         if not job or not job.is_active:
-            print(f"Job {job_id} not found or is inactive. Skipping.")
+            app.logger.warning(f"Job {job_id} not found or is inactive. Skipping.")
             return
 
         try:
@@ -30,19 +32,22 @@ def send_scheduled_message(app, job_id):
                     message_to_send += f" <@personEmail:{email}|>"
 
             api.messages.create(roomId=job.channel.room_id, markdown=message_to_send)
-            print(f"Successfully sent message for job: {job.name}")
             
-            # TODO: Update last_run timestamp for the job
+            # Update last_run timestamp
+            job.last_run = datetime.utcnow()
+            db.session.commit()
+            
+            app.logger.info(f"Successfully sent message for job: {job.name}")
             
         except Exception as e:
-            print(f"Error sending message for job {job.id}: {e}")
+            app.logger.error(f"Error sending message for job {job.id}: {e}")
 
 
 def run_scheduler(app):
     """
     The main scheduler loop that runs in a background thread.
     """
-    print("Scheduler thread started.")
+    app.logger.info("Scheduler thread started.")
     
     # This loop will periodically re-read the jobs from the database
     # and update the schedule. This allows for dynamic updates without restarting the app.
@@ -55,21 +60,35 @@ def run_scheduler(app):
                 # Get all active jobs from the database
                 jobs = ScheduledJob.query.filter_by(is_active=True).all()
                 
+                local_tz = datetime.now().astimezone().tzinfo
+
                 for job in jobs:
+                    # Create a timezone-aware datetime object for the job's scheduled time
+                    user_tz = pytz.timezone(job.timezone)
+                    hour, minute = map(int, job.schedule_time.split(':'))
+                    
+                    # Create a naive datetime, then localize it
+                    now_in_user_tz = datetime.now(user_tz)
+                    target_time_user_tz = now_in_user_tz.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+                    # Convert to server's local time
+                    target_time_local = target_time_user_tz.astimezone(local_tz)
+                    schedule_time_str = target_time_local.strftime('%H:%M')
+
                     # Use partial to pass arguments to the job function
                     job_func = partial(send_scheduled_message, app=app, job_id=job.id)
                     
                     # Schedule the job based on its frequency
                     if job.frequency == 'daily':
-                        schedule.every().day.at(job.schedule_time).do(job_func)
+                        schedule.every().day.at(schedule_time_str).do(job_func)
                     else:
                         # For 'monday', 'tuesday', etc.
-                        getattr(schedule.every(), job.frequency).at(job.schedule_time).do(job_func)
+                        getattr(schedule.every(), job.frequency).at(schedule_time_str).do(job_func)
                 
-                print(f"Scheduler updated. {len(jobs)} jobs loaded.")
+                app.logger.info(f"Scheduler updated. {len(jobs)} jobs loaded.")
 
             except Exception as e:
-                print(f"Error loading jobs into scheduler: {e}")
+                app.logger.error(f"Error loading jobs into scheduler: {e}")
 
         # Run any pending jobs
         schedule.run_pending()

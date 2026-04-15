@@ -27,6 +27,7 @@ class ScheduledJob(db.Model):
     
     # Schedule properties
     schedule_time = db.Column(db.String(5), nullable=False) # e.g., "09:00"
+    timezone = db.Column(db.String(64), nullable=False, default='UTC')
     frequency = db.Column(db.String(20), nullable=False, default='daily') # e.g., 'daily', 'monday', 'saturday'
     
     # Mentions - stored as a simple comma-separated string of emails

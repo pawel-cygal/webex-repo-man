@@ -5,6 +5,7 @@ webexteamssdk
 Flask
 Flask-SQLAlchemy
 Flask-WTF
+Flask-Migrate
 gunicorn
 
 # Scheduler
@@ -12,3 +13,4 @@ schedule
 
 # Utilities
 python-dotenv
+pytz

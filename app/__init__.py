@@ -2,14 +2,17 @@
 import os
 import threading
 import time
+import logging
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 import schedule
 from .config import Config
 
 # Initialize extensions
 db = SQLAlchemy()
+migrate = Migrate()
 
 def create_app(config_class=Config):
     """
@@ -18,8 +21,12 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
     # Initialize Flask extensions
     db.init_app(app)
+    migrate.init_app(app, db)
 
     # Register blueprints
     from .main.routes import main as main_blueprint
@@ -28,10 +35,6 @@ def create_app(config_class=Config):
     # In the future, to enable webhooks, we would uncomment the following:
     # from app.webhook.routes import webhook as webhook_blueprint
     # app.register_blueprint(webhook_blueprint)
-
-    # Create database tables if they don't exist
-    with app.app_context():
-        db.create_all()
 
     # Start the background scheduler
     from .scheduler.jobs import run_scheduler
