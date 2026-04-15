@@ -1,6 +1,7 @@
 # app/models.py
 from . import db
 from datetime import datetime
+from flask import url_for
 
 class WebexChannel(db.Model):
     """
@@ -40,3 +41,31 @@ class ScheduledJob(db.Model):
 
     def __repr__(self):
         return f'<ScheduledJob {self.name}>'
+
+    def to_dict(self):
+        """
+        Serializes the object to a dictionary.
+        """
+        return {
+            'id': self.id,
+            'name': self.name,
+            'message': self.message,
+            'channel': {
+                'id': self.channel.id,
+                'name': self.channel.name,
+                'room_id': self.channel.room_id
+            },
+            'schedule_time': self.schedule_time,
+            'timezone': self.timezone,
+            'frequency': self.frequency,
+            'frequency_display': self.frequency.capitalize(),
+            'mentions': self.mentions,
+            'is_active': self.is_active,
+            'last_run': self.last_run.strftime('%Y-%m-%d %H:%M') if self.last_run else None,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'urls': {
+                'run_now': url_for('main.run_now', job_id=self.id),
+                'edit': url_for('main.edit_job', job_id=self.id),
+                'delete': url_for('main.delete_job', job_id=self.id)
+            }
+        }

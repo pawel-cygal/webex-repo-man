@@ -1,7 +1,7 @@
 # app/main/routes.py
 import pytz
 from . import main
-from flask import render_template, request, redirect, url_for, flash, current_app
+from flask import render_template, request, redirect, url_for, flash, current_app, jsonify
 from .. import db
 from ..models import ScheduledJob, WebexChannel
 from ..scheduler.jobs import send_scheduled_message
@@ -26,36 +26,42 @@ def add_channel():
         room_id = request.form.get('room_id')
         
         if not name or not room_id:
-            flash('Channel Name and Room ID are required.', 'warning')
-            return redirect(url_for('main.index'))
+            return jsonify({'success': False, 'message': 'Channel Name and Room ID are required.'}), 400
+
+        if WebexChannel.query.filter_by(name=name).first() or WebexChannel.query.filter_by(room_id=room_id).first():
+            return jsonify({'success': False, 'message': 'A channel with this name or Room ID already exists.'}), 400
 
         new_channel = WebexChannel(name=name, room_id=room_id)
         db.session.add(new_channel)
         db.session.commit()
-        flash(f"Channel '{name}' added successfully!", 'success')
+        return jsonify({
+            'success': True, 
+            'message': f"Channel '{name}' added successfully! Page will reload.",
+            'reload': True
+        })
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error adding channel: {e}")
-        flash('Error adding channel. Check logs for details.', 'danger')
-        
-    return redirect(url_for('main.index'))
+        return jsonify({'success': False, 'message': 'Error adding channel. Check logs for details.'}), 500
 
 @main.route('/delete_channel/<int:channel_id>', methods=['POST'])
 def delete_channel(channel_id):
     """
     Handles the deletion of a Webex channel and its associated jobs.
     """
+    channel = WebexChannel.query.get_or_404(channel_id)
     try:
-        channel = WebexChannel.query.get_or_404(channel_id)
         db.session.delete(channel)
         db.session.commit()
-        flash(f"Channel '{channel.name}' and all its jobs have been deleted.", 'success')
+        return jsonify({
+            'success': True, 
+            'message': f"Channel '{channel.name}' and all its jobs have been deleted.",
+            'reload': True
+        })
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting channel: {e}")
-        flash('Error deleting channel. Check logs for details.', 'danger')
-
-    return redirect(url_for('main.index'))
+        return jsonify({'success': False, 'message': 'Error deleting channel. Check logs for details.'}), 500
 
 @main.route('/add_job', methods=['POST'])
 def add_job():
@@ -71,6 +77,9 @@ def add_job():
         timezone = request.form.get('timezone')
         mentions = request.form.get('mentions')
 
+        if not all([name, channel_id, message, frequency, schedule_time, timezone]):
+            return jsonify({'success': False, 'message': 'All fields are required.'}), 400
+
         new_job = ScheduledJob(
             name=name,
             channel_id=channel_id,
@@ -83,13 +92,17 @@ def add_job():
         )
         db.session.add(new_job)
         db.session.commit()
-        flash('Job added successfully!', 'success')
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Job added successfully!', 
+            'job': new_job.to_dict()
+        }), 201
+
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error adding job: {e}")
-        flash('Error adding job. Check logs for details.', 'danger')
-        
-    return redirect(url_for('main.index'))
+        return jsonify({'success': False, 'message': 'Error adding job. Check logs for details.'}), 500
 
 @main.route('/edit_job/<int:job_id>', methods=['GET', 'POST'])
 def edit_job(job_id):
@@ -97,9 +110,7 @@ def edit_job(job_id):
     Handles editing of an existing job.
     """
     job = ScheduledJob.query.get_or_404(job_id)
-    channels = WebexChannel.query.order_by(WebexChannel.name).all()
-    timezones = pytz.common_timezones
-
+    
     if request.method == 'POST':
         try:
             job.name = request.form.get('name')
@@ -112,13 +123,18 @@ def edit_job(job_id):
             job.is_active = 'is_active' in request.form
 
             db.session.commit()
-            flash('Job updated successfully!', 'success')
-            return redirect(url_for('main.index'))
+            return jsonify({
+                'success': True,
+                'message': 'Job updated successfully!',
+                'redirect_url': url_for('main.index')
+            })
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Error editing job: {e}")
-            flash('Error editing job. Check logs for details.', 'danger')
+            return jsonify({'success': False, 'message': 'Error editing job. Check logs for details.'}), 500
 
+    channels = WebexChannel.query.order_by(WebexChannel.name).all()
+    timezones = pytz.common_timezones
     return render_template('edit_job.html', job=job, channels=channels, timezones=timezones)
 
 @main.route('/delete_job/<int:job_id>', methods=['POST'])
@@ -126,17 +142,15 @@ def delete_job(job_id):
     """
     Handles the deletion of a scheduled job.
     """
+    job = ScheduledJob.query.get_or_404(job_id)
     try:
-        job = ScheduledJob.query.get_or_404(job_id)
         db.session.delete(job)
         db.session.commit()
-        flash('Job deleted successfully!', 'success')
+        return jsonify({'success': True, 'message': f"Job '{job.name}' deleted successfully!"})
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting job: {e}")
-        flash('Error deleting job. Check logs for details.', 'danger')
-
-    return redirect(url_for('main.index'))
+        return jsonify({'success': False, 'message': 'Error deleting job. Check logs for details.'}), 500
 
 @main.route('/run_now/<int:job_id>', methods=['POST'])
 def run_now(job_id):
@@ -148,9 +162,12 @@ def run_now(job_id):
         # We need the app object to pass to the function
         app = current_app._get_current_object()
         send_scheduled_message(app, job.id)
-        flash(f"Job '{job.name}' was triggered successfully!", 'success')
+        # The job object is updated in send_scheduled_message, so we can serialize it
+        return jsonify({
+            'success': True, 
+            'message': f"Job '{job.name}' was triggered successfully!",
+            'job': job.to_dict()
+        })
     except Exception as e:
         current_app.logger.error(f"Error running job '{job.name}' manually: {e}")
-        flash(f"Error running job '{job.name}'. Check logs for details.", 'danger')
-    
-    return redirect(url_for('main.index'))
+        return jsonify({'success': False, 'message': f"Error running job '{job.name}'. Check logs for details."}), 500
