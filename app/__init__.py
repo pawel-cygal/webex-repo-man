@@ -36,6 +36,9 @@ def create_app(config_class=Config):
     from .auth import auth as auth_blueprint
     app.register_blueprint(auth_blueprint)
 
+    from .admin import admin as admin_blueprint
+    app.register_blueprint(admin_blueprint)
+
     _bootstrap_super_admin(app)
 
     from .scheduler.jobs import start_scheduler
