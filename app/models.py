@@ -68,6 +68,30 @@ class JobLog(db.Model):
         }
 
 
+class Team(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), unique=True, nullable=False)
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    members = db.relationship('TeamMember', backref='team', lazy=True, cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<Team {self.name}>'
+
+
+class TeamMember(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    display_name = db.Column(db.String(255), nullable=True)
+
+    def display(self):
+        return self.display_name or self.email
+
+    def __repr__(self):
+        return f'<TeamMember {self.email}>'
+
+
 class WebexChannel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), unique=True, nullable=False)

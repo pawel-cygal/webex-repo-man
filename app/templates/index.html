@@ -29,6 +29,9 @@
             </a>
             {% if current_user.is_authenticated %}
             <div class="d-flex align-items-center">
+                <a href="{{ url_for('main.teams') }}" class="btn btn-sm btn-outline-light me-2">
+                    <i class="bi bi-people-fill"></i> Teams
+                </a>
                 {% if current_user.is_admin %}
                 <a href="{{ url_for('admin.users') }}" class="btn btn-sm btn-outline-light me-2">
                     <i class="bi bi-people"></i> Users

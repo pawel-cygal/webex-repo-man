@@ -4,7 +4,7 @@ from . import main
 from flask import render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
 from .. import db
-from ..models import ScheduledJob, WebexChannel, JobLog
+from ..models import ScheduledJob, WebexChannel, JobLog, Team, TeamMember
 from ..scheduler.jobs import send_scheduled_message
 
 
@@ -237,3 +237,89 @@ def job_history(job_id):
         .order_by(JobLog.executed_at.desc())\
         .paginate(page=page, per_page=50, error_out=False)
     return render_template('job_history.html', job=job, logs=logs)
+
+
+# --- Team Management ---
+
+@main.route('/teams')
+def teams():
+    all_teams = Team.query.order_by(Team.name).all()
+    return render_template('teams.html', teams=all_teams)
+
+
+@main.route('/teams/add', methods=['POST'])
+def add_team():
+    try:
+        name = (request.form.get('name') or '').strip()
+        if not name:
+            return jsonify({'success': False, 'message': 'Team name is required.'}), 400
+        if Team.query.filter_by(name=name).first():
+            return jsonify({'success': False, 'message': 'A team with this name already exists.'}), 400
+
+        team = Team(name=name, owner_id=current_user.id)
+        db.session.add(team)
+        db.session.commit()
+        return jsonify({'success': True, 'message': f"Team '{name}' created.", 'reload': True})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error adding team: {e}")
+        return jsonify({'success': False, 'message': 'Error adding team.'}), 500
+
+
+@main.route('/teams/<int:team_id>/delete', methods=['POST'])
+def delete_team(team_id):
+    team = Team.query.get_or_404(team_id)
+    try:
+        name = team.name
+        db.session.delete(team)
+        db.session.commit()
+        return jsonify({'success': True, 'message': f"Team '{name}' deleted.", 'reload': True})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting team: {e}")
+        return jsonify({'success': False, 'message': 'Error deleting team.'}), 500
+
+
+@main.route('/teams/<int:team_id>/members')
+def team_members(team_id):
+    team = Team.query.get_or_404(team_id)
+    return render_template('team_members.html', team=team)
+
+
+@main.route('/teams/<int:team_id>/members/add', methods=['POST'])
+def add_member(team_id):
+    team = Team.query.get_or_404(team_id)
+    try:
+        email = (request.form.get('email') or '').strip().lower()
+        display_name = (request.form.get('display_name') or '').strip() or None
+        if not email:
+            return jsonify({'success': False, 'message': 'Email is required.'}), 400
+
+        existing = TeamMember.query.filter_by(team_id=team.id, email=email).first()
+        if existing:
+            return jsonify({'success': False, 'message': f'{email} is already in this team.'}), 400
+
+        member = TeamMember(team_id=team.id, email=email, display_name=display_name)
+        db.session.add(member)
+        db.session.commit()
+        return jsonify({'success': True, 'message': f'{email} added to {team.name}.', 'reload': True})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error adding member: {e}")
+        return jsonify({'success': False, 'message': 'Error adding member.'}), 500
+
+
+@main.route('/teams/<int:team_id>/members/<int:member_id>/delete', methods=['POST'])
+def delete_member(team_id, member_id):
+    member = TeamMember.query.get_or_404(member_id)
+    if member.team_id != team_id:
+        return jsonify({'success': False, 'message': 'Member does not belong to this team.'}), 400
+    try:
+        email = member.email
+        db.session.delete(member)
+        db.session.commit()
+        return jsonify({'success': True, 'message': f'{email} removed.', 'reload': True})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error removing member: {e}")
+        return jsonify({'success': False, 'message': 'Error removing member.'}), 500
