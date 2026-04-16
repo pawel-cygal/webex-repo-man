@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const channelList = document.getElementById('channel-list');
     if (channelList) channelList.addEventListener('submit', handleDelegatedSubmit);
 
+    // --- Message Preview ---
+    setupPreviewToggles();
+
     // --- Frequency Checkboxes ---
     setupFrequencyCheckboxes();
 
@@ -185,6 +188,43 @@ document.addEventListener('DOMContentLoaded', function() {
             </td>
         `;
         row.insertAdjacentHTML('afterbegin', html);
+    }
+
+    function setupPreviewToggles() {
+        document.querySelectorAll('.preview-toggle').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const previewDiv = document.getElementById(btn.dataset.target);
+                if (!previewDiv) return;
+
+                const textarea = btn.previousElementSibling || btn.closest('.mb-3').querySelector('textarea');
+                if (!textarea) return;
+
+                if (previewDiv.classList.contains('d-none')) {
+                    const raw = textarea.value || '';
+                    const rendered = renderWebexMarkdown(raw);
+                    previewDiv.replaceChildren();
+                    const content = document.createElement('div');
+                    content.insertAdjacentHTML('afterbegin', rendered);
+                    previewDiv.appendChild(content);
+                    previewDiv.classList.remove('d-none');
+                    btn.querySelector('i').className = 'bi bi-eye-slash';
+                } else {
+                    previewDiv.classList.add('d-none');
+                    btn.querySelector('i').className = 'bi bi-eye';
+                }
+            });
+        });
+    }
+
+    function renderWebexMarkdown(text) {
+        let processed = text
+            .replace(/<@all>/g, '<span class="badge bg-warning text-dark">@all</span>')
+            .replace(/<@personEmail:([^|]+)\|?>/g, '<span class="badge bg-primary">@$1</span>');
+
+        if (typeof marked !== 'undefined') {
+            return marked.parse(processed);
+        }
+        return escapeHtml(processed).replace(/\n/g, '<br>');
     }
 
     function setupFrequencyCheckboxes() {
