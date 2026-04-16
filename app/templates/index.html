@@ -159,17 +159,18 @@
                             </div>
                             <div class="row">
                                 <div class="col-md-4 mb-3">
-                                    <label for="frequency" class="form-label">Frequency</label>
-                                    <select class="form-select" id="frequency" name="frequency">
-                                        <option value="daily">Daily</option>
-                                        <option value="monday">Every Monday</option>
-                                        <option value="tuesday">Every Tuesday</option>
-                                        <option value="wednesday">Every Wednesday</option>
-                                        <option value="thursday">Every Thursday</option>
-                                        <option value="friday">Every Friday</option>
-                                        <option value="saturday">Every Saturday</option>
-                                        <option value="sunday">Every Sunday</option>
-                                    </select>
+                                    <label class="form-label">Frequency</label>
+                                    <input type="hidden" id="frequency" name="frequency" value="daily">
+                                    <div class="form-check">
+                                        <input class="form-check-input freq-check" type="checkbox" value="daily" id="freq-daily" checked>
+                                        <label class="form-check-label" for="freq-daily">Daily</label>
+                                    </div>
+                                    {% for day in ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] %}
+                                    <div class="form-check">
+                                        <input class="form-check-input freq-check freq-day" type="checkbox" value="{{ day }}" id="freq-{{ day }}">
+                                        <label class="form-check-label" for="freq-{{ day }}">{{ day | capitalize }}</label>
+                                    </div>
+                                    {% endfor %}
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     <label for="schedule_time" class="form-label">Time</label>
@@ -234,7 +235,7 @@
                                                 {% if job.owner %}{{ job.owner.display() }}
                                                 {% else %}<span class="text-muted fst-italic">Legacy</span>{% endif %}
                                             </td>
-                                            <td>{{ job.frequency.capitalize() }} at {{ job.schedule_time }} ({{ job.timezone }})</td>
+                                            <td>{{ job._frequency_display() }} at {{ job.schedule_time }} ({{ job.timezone }})</td>
                                             <td>
                                                 {% if job.is_active %}
                                                     <span class="badge text-bg-success">Active</span>

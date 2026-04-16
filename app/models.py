@@ -71,7 +71,7 @@ class ScheduledJob(db.Model):
 
     schedule_time = db.Column(db.String(5), nullable=False)
     timezone = db.Column(db.String(64), nullable=False, default='UTC')
-    frequency = db.Column(db.String(20), nullable=False, default='daily')
+    frequency = db.Column(db.String(128), nullable=False, default='daily')
 
     mentions = db.Column(db.String(1024), nullable=True)
 
@@ -81,6 +81,17 @@ class ScheduledJob(db.Model):
 
     def __repr__(self):
         return f'<ScheduledJob {self.name}>'
+
+    _DAY_SHORT = {
+        'monday': 'Mon', 'tuesday': 'Tue', 'wednesday': 'Wed',
+        'thursday': 'Thu', 'friday': 'Fri', 'saturday': 'Sat', 'sunday': 'Sun',
+    }
+
+    def _frequency_display(self):
+        if self.frequency == 'daily':
+            return 'Daily'
+        parts = [d.strip() for d in self.frequency.split(',') if d.strip()]
+        return ', '.join(self._DAY_SHORT.get(d, d.capitalize()) for d in parts)
 
     def to_dict(self):
         return {
@@ -96,7 +107,7 @@ class ScheduledJob(db.Model):
             'schedule_time': self.schedule_time,
             'timezone': self.timezone,
             'frequency': self.frequency,
-            'frequency_display': self.frequency.capitalize(),
+            'frequency_display': self._frequency_display(),
             'mentions': self.mentions,
             'is_active': self.is_active,
             'last_run': self.last_run.strftime('%Y-%m-%d %H:%M') if self.last_run else None,

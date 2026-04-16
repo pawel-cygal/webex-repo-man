@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const channelList = document.getElementById('channel-list');
     if (channelList) channelList.addEventListener('submit', handleDelegatedSubmit);
 
+    // --- Frequency Checkboxes ---
+    setupFrequencyCheckboxes();
+
     // --- Search & Sort ---
     setupTableSearch('job-search', 'jobs-table-body');
     setupListSearch('channel-search', 'channel-list');
@@ -181,6 +184,39 @@ document.addEventListener('DOMContentLoaded', function() {
             </td>
         `;
         row.insertAdjacentHTML('afterbegin', html);
+    }
+
+    function setupFrequencyCheckboxes() {
+        const dailyBox = document.getElementById('freq-daily');
+        const dayBoxes = document.querySelectorAll('.freq-day');
+        const hiddenInput = document.getElementById('frequency');
+        if (!dailyBox || !hiddenInput) return;
+
+        function syncHiddenInput() {
+            if (dailyBox.checked) {
+                hiddenInput.value = 'daily';
+                return;
+            }
+            const checked = Array.from(dayBoxes).filter(cb => cb.checked).map(cb => cb.value);
+            hiddenInput.value = checked.length ? checked.join(',') : 'daily';
+            if (!checked.length) dailyBox.checked = true;
+        }
+
+        dailyBox.addEventListener('change', () => {
+            if (dailyBox.checked) {
+                dayBoxes.forEach(cb => { cb.checked = false; });
+            }
+            syncHiddenInput();
+        });
+
+        dayBoxes.forEach(cb => {
+            cb.addEventListener('change', () => {
+                if (cb.checked) dailyBox.checked = false;
+                syncHiddenInput();
+            });
+        });
+
+        syncHiddenInput();
     }
 
     function setupTableSearch(inputId, tbodyId) {

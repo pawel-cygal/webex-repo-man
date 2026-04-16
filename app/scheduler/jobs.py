@@ -69,7 +69,11 @@ def _normalize_tz(tz_name):
 
 def _build_trigger(job):
     hour, minute = map(int, job.schedule_time.split(':'))
-    day_of_week = '*' if job.frequency == 'daily' else job.frequency[:3]
+    if job.frequency == 'daily':
+        day_of_week = '*'
+    else:
+        days = [d.strip()[:3] for d in job.frequency.split(',') if d.strip()]
+        day_of_week = ','.join(days)
     tz_name = _normalize_tz(job.timezone)
     return CronTrigger(
         day_of_week=day_of_week,

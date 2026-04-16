@@ -53,12 +53,21 @@
                     </div>
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label for="frequency" class="form-label">Frequency</label>
-                            <select class="form-select" id="frequency" name="frequency">
-                                {% for freq in ['daily', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] %}
-                                <option value="{{ freq }}" {% if freq == job.frequency %}selected{% endif %}>{{ freq.capitalize() }}</option>
-                                {% endfor %}
-                            </select>
+                            <label class="form-label">Frequency</label>
+                            <input type="hidden" id="frequency" name="frequency" value="{{ job.frequency }}">
+                            {% set selected_days = job.frequency.split(',') | map('trim') | list %}
+                            <div class="form-check">
+                                <input class="form-check-input freq-check" type="checkbox" value="daily" id="freq-daily"
+                                       {% if 'daily' in selected_days %}checked{% endif %}>
+                                <label class="form-check-label" for="freq-daily">Daily</label>
+                            </div>
+                            {% for day in ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] %}
+                            <div class="form-check">
+                                <input class="form-check-input freq-check freq-day" type="checkbox" value="{{ day }}" id="freq-{{ day }}"
+                                       {% if day in selected_days %}checked{% endif %}>
+                                <label class="form-check-label" for="freq-{{ day }}">{{ day | capitalize }}</label>
+                            </div>
+                            {% endfor %}
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="schedule_time" class="form-label">Time</label>
