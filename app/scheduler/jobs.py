@@ -1,4 +1,5 @@
 # app/scheduler/jobs.py
+import hashlib
 from datetime import datetime
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -8,14 +9,11 @@ from .. import db
 from ..models import ScheduledJob
 
 _scheduler = None
+_job_hashes = {}
 RECONCILE_JOB_ID = '_reconcile'
 
 
 def send_scheduled_message(app, job_id):
-    """
-    Fetches a job by its ID and sends the message to Webex.
-    Runs inside the Flask application context.
-    """
     with app.app_context():
         app.logger.info(f"Running job ID: {job_id}")
         job = ScheduledJob.query.get(job_id)
@@ -46,6 +44,11 @@ def send_scheduled_message(app, job_id):
             app.logger.error(f"Error sending message for job {job.id}: {e}")
 
 
+def _job_config_hash(job):
+    key = f"{job.id}|{job.schedule_time}|{job.frequency}|{job.timezone}|{job.is_active}"
+    return hashlib.md5(key.encode()).hexdigest()
+
+
 def _build_trigger(job):
     hour, minute = map(int, job.schedule_time.split(':'))
     day_of_week = '*' if job.frequency == 'daily' else job.frequency[:3]
@@ -58,15 +61,28 @@ def _build_trigger(job):
 
 
 def _reconcile(app):
-    """Sync APScheduler state to match active jobs in the database."""
+    """
+    Sync APScheduler state to match active jobs in the database.
+    Only adds/replaces a job when its schedule config has changed since
+    the last reconcile, preserving next_run for unchanged jobs.
+    """
+    global _job_hashes
     with app.app_context():
         try:
             jobs = ScheduledJob.query.filter_by(is_active=True).all()
             desired_ids = set()
+            new_hashes = {}
+            changes = 0
 
             for job in jobs:
                 sched_id = f"job_{job.id}"
                 desired_ids.add(sched_id)
+                h = _job_config_hash(job)
+                new_hashes[sched_id] = h
+
+                if _job_hashes.get(sched_id) == h:
+                    continue
+
                 _scheduler.add_job(
                     send_scheduled_message,
                     trigger=_build_trigger(job),
@@ -76,21 +92,29 @@ def _reconcile(app):
                     replace_existing=True,
                     misfire_grace_time=3600,
                 )
+                changes += 1
 
+            removed = 0
             for sched_job in _scheduler.get_jobs():
                 if sched_job.id == RECONCILE_JOB_ID:
                     continue
                 if sched_job.id not in desired_ids:
                     _scheduler.remove_job(sched_job.id)
+                    removed += 1
 
-            app.logger.info(f"Scheduler reconciled. {len(jobs)} active job(s) loaded.")
+            _job_hashes = new_hashes
+
+            if changes or removed:
+                app.logger.info(
+                    f"Scheduler reconciled: {changes} added/updated, "
+                    f"{removed} removed, {len(jobs)} total active."
+                )
 
         except Exception as e:
             app.logger.error(f"Error reconciling scheduler: {e}")
 
 
 def start_scheduler(app):
-    """Initialize APScheduler and start the reconciliation loop."""
     global _scheduler
     if _scheduler is not None:
         return _scheduler
