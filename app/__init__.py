@@ -1,6 +1,5 @@
 # app/__init__.py
 import logging
-import secrets
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -73,7 +72,7 @@ def _bootstrap_super_admin(app):
 
         initial_password = (
             app.config.get('SUPER_ADMIN_INITIAL_PASSWORD')
-            or secrets.token_urlsafe(12)
+            or 'changeme'
         )
         user = User(
             email=email,

@@ -19,11 +19,26 @@ def require_login():
 def index():
     """
     Main page of the web panel. Displays channels and scheduled jobs.
+    `?scope=my` restricts the lists to items owned by the current user.
     """
-    jobs = ScheduledJob.query.order_by(ScheduledJob.created_at.desc()).all()
-    channels = WebexChannel.query.order_by(WebexChannel.name).all()
+    scope = 'my' if request.args.get('scope') == 'my' else 'all'
+
+    jobs_q = ScheduledJob.query
+    channels_q = WebexChannel.query
+    if scope == 'my':
+        jobs_q = jobs_q.filter_by(owner_id=current_user.id)
+        channels_q = channels_q.filter_by(owner_id=current_user.id)
+
+    jobs = jobs_q.order_by(ScheduledJob.created_at.desc()).all()
+    channels = channels_q.order_by(WebexChannel.name).all()
     timezones = pytz.common_timezones
-    return render_template('index.html', jobs=jobs, channels=channels, timezones=timezones)
+    return render_template(
+        'index.html',
+        jobs=jobs,
+        channels=channels,
+        timezones=timezones,
+        scope=scope,
+    )
 
 @main.route('/add_channel', methods=['POST'])
 def add_channel():

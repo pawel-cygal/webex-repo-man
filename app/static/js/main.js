@@ -1,6 +1,6 @@
 // Main JavaScript file for asynchronous UI updates
 document.addEventListener('DOMContentLoaded', function() {
-    
+
     // --- Form Handlers ---
     const addJobForm = document.getElementById('add-job-form');
     if (addJobForm) addJobForm.addEventListener('submit', handleFormSubmit);
@@ -27,6 +27,18 @@ document.addEventListener('DOMContentLoaded', function() {
         sessionStorage.removeItem('alertCategory');
     }
 
+    // --- Helpers ---
+
+    function escapeHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     // --- Functions ---
 
     function handleFormSubmit(event) {
@@ -48,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (data.reload) {
                     showAlert(data.message, 'success');
                     setTimeout(() => window.location.reload(), 1000);
-                } else if (data.job) { // Assumes 'add job'
+                } else if (data.job) {
                     addJobRow(data.job);
                     showAlert(data.message, 'success');
                     form.reset();
@@ -69,7 +81,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleDelegatedSubmit(event) {
         const form = event.target;
 
-        // Handle Delete Job
         if (form.matches('.delete-job-form')) {
             event.preventDefault();
             if (confirm('Are you sure you want to delete this job?')) {
@@ -85,7 +96,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Handle Run Now
         if (form.matches('.run-now-form')) {
             event.preventDefault();
             fetch(form.action, { method: 'POST' })
@@ -93,13 +103,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(data => {
                     if (data.success) {
                         showAlert(data.message, 'success');
-                        form.closest('tr').children[4].innerHTML = data.job.last_run;
+                        const lastRunCell = form.closest('tr').querySelector('td.last-run-cell');
+                        if (lastRunCell) lastRunCell.textContent = data.job.last_run || '';
                     } else { showAlert(data.message, 'danger'); }
                 })
                 .catch(err => showAlert('An unexpected error occurred.', 'danger'));
         }
 
-        // Handle Clone Job
         if (form.matches('.clone-job-form')) {
             event.preventDefault();
             fetch(form.action, { method: 'POST' })
@@ -113,7 +123,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 .catch(err => showAlert('An unexpected error occurred.', 'danger'));
         }
 
-        // Handle Delete Channel
         if (form.matches('.delete-channel-form')) {
             event.preventDefault();
             if (confirm('Are you sure? Deleting a channel will also delete all its jobs.')) {
@@ -132,17 +141,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function addJobRow(job) {
         const tableBody = document.getElementById('jobs-table-body');
-        const noJobsRow = document.querySelector('#jobs-table-body tr[colspan="6"]');
-        if (noJobsRow) noJobsRow.parentElement.remove();
+        const emptyCell = tableBody.querySelector('td[colspan]');
+        if (emptyCell) emptyCell.parentElement.remove();
+
+        const name = escapeHtml(job.name);
+        const channelName = escapeHtml(job.channel.name);
+        const roomId = escapeHtml(job.channel.room_id);
+        const freq = escapeHtml(job.frequency_display);
+        const time = escapeHtml(job.schedule_time);
+        const tz = escapeHtml(job.timezone);
+        const lastRun = job.last_run ? escapeHtml(job.last_run) : '<span class="text-muted">Never</span>';
+        const ownerCell = job.owner
+            ? escapeHtml(job.owner)
+            : '<span class="text-muted fst-italic">Legacy</span>';
+        const statusClass = job.is_active ? 'success' : 'secondary';
+        const statusLabel = job.is_active ? 'Active' : 'Inactive';
 
         const row = tableBody.insertRow(0);
         row.id = `job-row-${job.id}`;
-        row.innerHTML = `
-            <td>${job.name}</td>
-            <td><a href="#" title="Room ID: ${job.channel.room_id}">${job.channel.name}</a></td>
-            <td>${job.frequency_display} at ${job.schedule_time} (${job.timezone})</td>
-            <td><span class="badge text-bg-${job.is_active ? 'success' : 'secondary'}">${job.is_active ? 'Active' : 'Inactive'}</span></td>
-            <td>${job.last_run ? job.last_run : '<span class="text-muted">Never</span>'}</td>
+        const html = `
+            <td>${name}</td>
+            <td><a href="#" title="Room ID: ${roomId}">${channelName}</a></td>
+            <td>${ownerCell}</td>
+            <td>${freq} at ${time} (${tz})</td>
+            <td><span class="badge text-bg-${statusClass}">${statusLabel}</span></td>
+            <td class="last-run-cell">${lastRun}</td>
             <td class="text-end">
                 <div class="btn-group">
                     <form action="${job.urls.run_now}" method="POST" class="d-inline run-now-form"><button type="submit" class="btn btn-sm btn-outline-secondary" title="Run Now"><i class="bi bi-play-fill"></i></button></form>
@@ -152,6 +175,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </td>
         `;
+        row.insertAdjacentHTML('afterbegin', html);
     }
 
     function showAlert(message, category = 'primary') {
@@ -159,7 +183,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const alert = document.createElement('div');
         alert.className = `alert alert-${category} alert-dismissible fade show`;
         alert.role = 'alert';
-        alert.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+        const text = document.createElement('span');
+        text.textContent = message;
+        alert.appendChild(text);
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close';
+        closeBtn.setAttribute('data-bs-dismiss', 'alert');
+        closeBtn.setAttribute('aria-label', 'Close');
+        alert.appendChild(closeBtn);
         alertContainer.insertBefore(alert, alertContainer.firstChild);
     }
 });
