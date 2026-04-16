@@ -6,11 +6,36 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from webexteamssdk import WebexTeamsAPI
 from .. import db
-from ..models import ScheduledJob, JobLog
+import time as _time
+from ..models import ScheduledJob, JobLog, TeamMember
 
 _scheduler = None
 _job_hashes = {}
 RECONCILE_JOB_ID = '_reconcile'
+
+
+def _build_message(job):
+    message_to_send = job.message
+    if job.mentions:
+        tokens = [t.strip() for t in job.mentions.split(',') if t.strip()]
+        for token in tokens:
+            if token.lower() == 'all':
+                message_to_send += " <@all>"
+            else:
+                message_to_send += f" <@personEmail:{token}|>"
+    return message_to_send
+
+
+def _get_target_members(job):
+    if not job.team:
+        return []
+    if job.selected_members:
+        ids = [int(x) for x in job.selected_members.split(',') if x.strip()]
+        return TeamMember.query.filter(
+            TeamMember.team_id == job.team_id,
+            TeamMember.id.in_(ids)
+        ).all()
+    return job.team.members
 
 
 def send_scheduled_message(app, job_id, trigger_type='scheduled'):
@@ -23,23 +48,40 @@ def send_scheduled_message(app, job_id, trigger_type='scheduled'):
 
         try:
             api = WebexTeamsAPI(access_token=app.config['WEBEX_BOT_TOKEN'])
+            message_to_send = _build_message(job)
 
-            message_to_send = job.message
-            if job.mentions:
-                tokens = [t.strip() for t in job.mentions.split(',') if t.strip()]
-                for token in tokens:
-                    if token.lower() == 'all':
-                        message_to_send += " <@all>"
-                    else:
-                        message_to_send += f" <@personEmail:{token}|>"
+            if job.delivery_mode == 'private':
+                members = _get_target_members(job)
+                errors = []
+                for member in members:
+                    try:
+                        api.messages.create(toPersonEmail=member.email, markdown=message_to_send)
+                        app.logger.info(f"Sent private msg for job '{job.name}' to {member.email}")
+                    except Exception as e:
+                        errors.append(f"{member.email}: {e}")
+                        app.logger.error(f"Failed to send to {member.email}: {e}")
+                    _time.sleep(0.25)
 
-            api.messages.create(roomId=job.channel.room_id, markdown=message_to_send)
+                job.last_run = datetime.utcnow()
+                if errors:
+                    db.session.add(JobLog(
+                        job_id=job.id, success=False,
+                        error_message=f"Partial: {len(errors)}/{len(members)} failed. " + '; '.join(errors),
+                        trigger_type=trigger_type,
+                    ))
+                else:
+                    db.session.add(JobLog(
+                        job_id=job.id, success=True, trigger_type=trigger_type,
+                    ))
+                db.session.commit()
+                app.logger.info(f"Private delivery for job '{job.name}': {len(members) - len(errors)}/{len(members)} OK")
 
-            job.last_run = datetime.utcnow()
-            db.session.add(JobLog(job_id=job.id, success=True, trigger_type=trigger_type))
-            db.session.commit()
-
-            app.logger.info(f"Successfully sent message for job: {job.name}")
+            else:
+                api.messages.create(roomId=job.channel.room_id, markdown=message_to_send)
+                job.last_run = datetime.utcnow()
+                db.session.add(JobLog(job_id=job.id, success=True, trigger_type=trigger_type))
+                db.session.commit()
+                app.logger.info(f"Successfully sent message for job: {job.name}")
 
         except Exception as e:
             app.logger.error(f"Error sending message for job {job.id}: {e}")
@@ -100,11 +142,17 @@ def _preflight_check(app, job):
     except pytz.UnknownTimeZoneError:
         issues.append(f"unknown timezone '{job.timezone}' (normalized: '{tz_name}')")
 
-    # 2. Channel
-    if not job.channel:
-        issues.append("no channel linked")
-    elif not job.channel.room_id:
-        issues.append(f"channel '{job.channel.name}' has no room_id")
+    # 2. Channel or Team
+    if job.delivery_mode == 'private':
+        if not job.team:
+            issues.append("private mode but no team linked")
+        elif not job.team.members:
+            issues.append(f"team '{job.team.name}' has no members")
+    else:
+        if not job.channel:
+            issues.append("no channel linked")
+        elif not job.channel.room_id:
+            issues.append(f"channel '{job.channel.name}' has no room_id")
 
     # 3. Bot token
     if not app.config.get('WEBEX_BOT_TOKEN'):

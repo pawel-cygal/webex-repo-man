@@ -40,12 +40,34 @@
                         <input type="text" class="form-control" id="name" name="name" value="{{ job.name }}" required>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">Delivery</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="delivery_mode" value="channel" id="dm-channel"
+                                   {% if job.delivery_mode != 'private' %}checked{% endif %}>
+                            <label class="btn btn-outline-primary" for="dm-channel"><i class="bi bi-hash"></i> Channel</label>
+                            <input type="radio" class="btn-check" name="delivery_mode" value="private" id="dm-private"
+                                   {% if job.delivery_mode == 'private' %}checked{% endif %}>
+                            <label class="btn btn-outline-primary" for="dm-private"><i class="bi bi-envelope"></i> Private (1:1)</label>
+                        </div>
+                    </div>
+                    <div class="mb-3 {% if job.delivery_mode == 'private' %}d-none{% endif %}" id="channel-target">
                         <label for="channel_id" class="form-label">Channel</label>
-                        <select class="form-select" id="channel_id" name="channel_id" required>
+                        <select class="form-select" id="channel_id" name="channel_id">
                             {% for channel in channels %}
                             <option value="{{ channel.id }}" {% if channel.id == job.channel_id %}selected{% endif %}>{{ channel.name }}</option>
                             {% endfor %}
                         </select>
+                    </div>
+                    <div class="mb-3 {% if job.delivery_mode != 'private' %}d-none{% endif %}" id="team-target">
+                        <label for="team_id" class="form-label">Team</label>
+                        <select class="form-select" id="team_id" name="team_id">
+                            <option value="" disabled {% if not job.team_id %}selected{% endif %}>Select a team</option>
+                            {% for team in teams %}
+                            <option value="{{ team.id }}" {% if team.id == job.team_id %}selected{% endif %}>{{ team.name }} ({{ team.members | length }})</option>
+                            {% endfor %}
+                        </select>
+                        <div id="member-picker" class="mt-2"></div>
+                        <small class="text-muted">Leave unchecked to send to all members.</small>
                     </div>
                     <div class="mb-3">
                         <label for="message" class="form-label">Message</label>

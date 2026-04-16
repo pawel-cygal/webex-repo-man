@@ -148,13 +148,34 @@
                                 <input type="text" class="form-control" id="name" name="name" placeholder="e.g., Daily Standup Reminder" required>
                             </div>
                             <div class="mb-3">
+                                <label class="form-label">Delivery</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="delivery_mode" value="channel" id="dm-channel" checked>
+                                    <label class="btn btn-outline-primary" for="dm-channel"><i class="bi bi-hash"></i> Channel</label>
+                                    <input type="radio" class="btn-check" name="delivery_mode" value="private" id="dm-private">
+                                    <label class="btn btn-outline-primary" for="dm-private"><i class="bi bi-envelope"></i> Private (1:1)</label>
+                                </div>
+                            </div>
+                            <div class="mb-3" id="channel-target">
                                 <label for="channel_id" class="form-label">Channel</label>
-                                <select class="form-select" id="channel_id" name="channel_id" required>
+                                <select class="form-select" id="channel_id" name="channel_id">
                                     <option value="" disabled selected>Select a channel</option>
                                     {% for channel in channels %}
                                     <option value="{{ channel.id }}">{{ channel.name }}</option>
                                     {% endfor %}
                                 </select>
+                            </div>
+                            <div class="mb-3 d-none" id="team-target">
+                                <label for="team_id" class="form-label">Team</label>
+                                <select class="form-select" id="team_id" name="team_id">
+                                    <option value="" disabled selected>Select a team</option>
+                                    {% for team in teams %}
+                                    <option value="{{ team.id }}" data-members='{{ team.members | map(attribute="id") | list | tojson }}'>{{ team.name }} ({{ team.members | length }})</option>
+                                    {% endfor %}
+                                </select>
+                                <div id="member-picker" class="mt-2">
+                                </div>
+                                <small class="text-muted">Leave unchecked to send to all members.</small>
                             </div>
                             <div class="mb-3">
                                 <label for="message" class="form-label">Message</label>
@@ -237,7 +258,15 @@
                                     {% for job in jobs %}
                                         <tr>
                                             <td>{{ job.name }}</td>
-                                            <td><a href="#" title="Room ID: {{ job.channel.room_id }}">{{ job.channel.name }}</a></td>
+                                            <td>
+                                                {% if job.delivery_mode == 'private' and job.team %}
+                                                <i class="bi bi-envelope"></i> {{ job.team.name }}
+                                                {% elif job.channel %}
+                                                <a href="#" title="Room ID: {{ job.channel.room_id }}">{{ job.channel.name }}</a>
+                                                {% else %}
+                                                <span class="text-muted">—</span>
+                                                {% endif %}
+                                            </td>
                                             <td>
                                                 {% if job.owner %}{{ job.owner.display() }}
                                                 {% else %}<span class="text-muted fst-italic">Legacy</span>{% endif %}

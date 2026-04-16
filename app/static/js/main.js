@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const channelList = document.getElementById('channel-list');
     if (channelList) channelList.addEventListener('submit', handleDelegatedSubmit);
 
+    // --- Delivery Mode Toggle ---
+    setupDeliveryMode();
+
     // --- Message Preview ---
     setupPreviewToggles();
 
@@ -188,6 +191,59 @@ document.addEventListener('DOMContentLoaded', function() {
             </td>
         `;
         row.insertAdjacentHTML('afterbegin', html);
+    }
+
+    function setupDeliveryMode() {
+        const radios = document.querySelectorAll('input[name="delivery_mode"]');
+        const channelTarget = document.getElementById('channel-target');
+        const teamTarget = document.getElementById('team-target');
+        const teamSelect = document.getElementById('team_id');
+        const memberPicker = document.getElementById('member-picker');
+        if (!radios.length || !channelTarget || !teamTarget) return;
+
+        function toggle() {
+            const mode = document.querySelector('input[name="delivery_mode"]:checked').value;
+            channelTarget.classList.toggle('d-none', mode !== 'channel');
+            teamTarget.classList.toggle('d-none', mode !== 'private');
+        }
+
+        radios.forEach(r => r.addEventListener('change', toggle));
+
+        if (teamSelect && memberPicker) {
+            teamSelect.addEventListener('change', () => {
+                memberPicker.replaceChildren();
+                const opt = teamSelect.options[teamSelect.selectedIndex];
+                if (!opt || !opt.dataset.members) return;
+                try {
+                    const teamId = opt.value;
+                    fetch('/teams/' + teamId + '/members/list')
+                        .then(r => r.json())
+                        .then(members => {
+                            memberPicker.replaceChildren();
+                            members.forEach(m => {
+                                const div = document.createElement('div');
+                                div.className = 'form-check form-check-inline';
+                                const cb = document.createElement('input');
+                                cb.className = 'form-check-input';
+                                cb.type = 'checkbox';
+                                cb.name = 'member_ids';
+                                cb.value = m.id;
+                                cb.id = 'member-' + m.id;
+                                const lbl = document.createElement('label');
+                                lbl.className = 'form-check-label';
+                                lbl.htmlFor = 'member-' + m.id;
+                                lbl.textContent = m.display || m.email;
+                                div.appendChild(cb);
+                                div.appendChild(lbl);
+                                memberPicker.appendChild(div);
+                            });
+                        })
+                        .catch(() => {});
+                } catch (e) {}
+            });
+        }
+
+        toggle();
     }
 
     function setupPreviewToggles() {

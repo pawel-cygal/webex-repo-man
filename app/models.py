@@ -108,8 +108,14 @@ class ScheduledJob(db.Model):
     name = db.Column(db.String(128), nullable=False)
     message = db.Column(db.Text, nullable=False)
 
-    channel_id = db.Column(db.Integer, db.ForeignKey('webex_channel.id'), nullable=False)
+    channel_id = db.Column(db.Integer, db.ForeignKey('webex_channel.id'), nullable=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    delivery_mode = db.Column(db.String(20), nullable=False, default='channel')
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=True)
+    selected_members = db.Column(db.Text, nullable=True)
+
+    team = db.relationship('Team', backref='jobs')
 
     schedule_time = db.Column(db.String(5), nullable=False)
     timezone = db.Column(db.String(64), nullable=False, default='UTC')
@@ -142,11 +148,16 @@ class ScheduledJob(db.Model):
             'id': self.id,
             'name': self.name,
             'message': self.message,
+            'delivery_mode': self.delivery_mode,
             'channel': {
                 'id': self.channel.id,
                 'name': self.channel.name,
                 'room_id': self.channel.room_id
-            },
+            } if self.channel else None,
+            'team': {
+                'id': self.team.id,
+                'name': self.team.name,
+            } if self.team else None,
             'owner': self.owner.display() if self.owner else None,
             'schedule_time': self.schedule_time,
             'timezone': self.timezone,

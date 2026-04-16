@@ -31,11 +31,13 @@ def index():
 
     jobs = jobs_q.order_by(ScheduledJob.created_at.desc()).all()
     channels = channels_q.order_by(WebexChannel.name).all()
+    all_teams = Team.query.order_by(Team.name).all()
     timezones = pytz.common_timezones
     return render_template(
         'index.html',
         jobs=jobs,
         channels=channels,
+        teams=all_teams,
         timezones=timezones,
         scope=scope,
     )
@@ -94,15 +96,31 @@ def add_job():
     """
     try:
         name = request.form.get('name')
-        channel_id = request.form.get('channel_id')
         message = request.form.get('message')
         frequency = request.form.get('frequency')
         schedule_time = request.form.get('schedule_time')
         timezone = request.form.get('timezone')
         mentions = request.form.get('mentions')
+        delivery_mode = request.form.get('delivery_mode', 'channel')
 
-        if not all([name, channel_id, message, frequency, schedule_time, timezone]):
+        if not all([name, message, frequency, schedule_time, timezone]):
             return jsonify({'success': False, 'message': 'All fields are required.'}), 400
+
+        channel_id = None
+        team_id = None
+        selected_members = None
+
+        if delivery_mode == 'private':
+            team_id = request.form.get('team_id')
+            if not team_id:
+                return jsonify({'success': False, 'message': 'Select a team for private delivery.'}), 400
+            member_ids = request.form.getlist('member_ids')
+            if member_ids:
+                selected_members = ','.join(member_ids)
+        else:
+            channel_id = request.form.get('channel_id')
+            if not channel_id:
+                return jsonify({'success': False, 'message': 'Select a channel.'}), 400
 
         new_job = ScheduledJob(
             name=name,
@@ -112,6 +130,9 @@ def add_job():
             schedule_time=schedule_time,
             timezone=timezone,
             mentions=mentions,
+            delivery_mode=delivery_mode,
+            team_id=team_id,
+            selected_members=selected_members,
             is_active=True,
             owner_id=current_user.id,
         )
@@ -139,13 +160,23 @@ def edit_job(job_id):
     if request.method == 'POST':
         try:
             job.name = request.form.get('name')
-            job.channel_id = request.form.get('channel_id')
             job.message = request.form.get('message')
             job.frequency = request.form.get('frequency')
             job.schedule_time = request.form.get('schedule_time')
             job.timezone = request.form.get('timezone')
             job.mentions = request.form.get('mentions')
             job.is_active = 'is_active' in request.form
+            job.delivery_mode = request.form.get('delivery_mode', 'channel')
+
+            if job.delivery_mode == 'private':
+                job.team_id = request.form.get('team_id') or None
+                job.channel_id = None
+                member_ids = request.form.getlist('member_ids')
+                job.selected_members = ','.join(member_ids) if member_ids else None
+            else:
+                job.channel_id = request.form.get('channel_id') or None
+                job.team_id = None
+                job.selected_members = None
 
             db.session.commit()
             return jsonify({
@@ -159,8 +190,9 @@ def edit_job(job_id):
             return jsonify({'success': False, 'message': 'Error editing job. Check logs for details.'}), 500
 
     channels = WebexChannel.query.order_by(WebexChannel.name).all()
+    all_teams = Team.query.order_by(Team.name).all()
     timezones = pytz.common_timezones
-    return render_template('edit_job.html', job=job, channels=channels, timezones=timezones)
+    return render_template('edit_job.html', job=job, channels=channels, teams=all_teams, timezones=timezones)
 
 @main.route('/delete_job/<int:job_id>', methods=['POST'])
 def delete_job(job_id):
@@ -278,6 +310,15 @@ def delete_team(team_id):
         db.session.rollback()
         current_app.logger.error(f"Error deleting team: {e}")
         return jsonify({'success': False, 'message': 'Error deleting team.'}), 500
+
+
+@main.route('/teams/<int:team_id>/members/list')
+def team_members_json(team_id):
+    team = Team.query.get_or_404(team_id)
+    return jsonify([
+        {'id': m.id, 'email': m.email, 'display': m.display()}
+        for m in team.members
+    ])
 
 
 @main.route('/teams/<int:team_id>/members')
