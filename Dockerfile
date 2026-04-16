@@ -19,6 +19,6 @@ RUN pip install --no-cache-dir --trusted-host pypi.python.org -r requirements.tx
 # Copy the rest of the application's code into the container
 COPY . .
 
-# Define the command to run the application
-# We use run.py which will be the entry point for our Flask app
-CMD ["python", "run.py"]
+# Single worker is mandatory: APScheduler runs in-process so multiple
+# workers would spawn duplicate schedulers and send messages N times.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "2", "run:app"]
