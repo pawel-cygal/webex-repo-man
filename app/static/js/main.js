@@ -27,9 +27,30 @@ document.addEventListener('DOMContentLoaded', function() {
     // Delegate for team/member pages (forms live in table bodies)
     document.body.addEventListener('submit', function(event) {
         const form = event.target;
-        if (form.matches('.delete-team-form') || form.matches('.delete-member-form')) {
+        if (form.matches('.delete-team-form') || form.matches('.delete-member-form')
+            || form.matches('.clone-team-form')) {
             handleDelegatedSubmit(event);
         }
+    });
+
+    // Rename team (prompt-based)
+    document.querySelectorAll('.rename-team-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const currentName = btn.dataset.name;
+            const newName = prompt('Rename team:', currentName);
+            if (!newName || newName.trim() === currentName) return;
+            const formData = new FormData();
+            formData.append('name', newName.trim());
+            fetch(btn.dataset.url, { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(data.message, 'success');
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else { showAlert(data.message, 'danger'); }
+                })
+                .catch(() => showAlert('An unexpected error occurred.', 'danger'));
+        });
     });
 
     // --- Delivery Mode Toggle ---
@@ -146,6 +167,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.success) {
                         addJobRow(data.job);
                         showAlert(data.message, 'success');
+                    } else { showAlert(data.message, 'danger'); }
+                })
+                .catch(err => showAlert('An unexpected error occurred.', 'danger'));
+        }
+
+        if (form.matches('.clone-team-form')) {
+            event.preventDefault();
+            fetch(form.action, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(data.message, 'success');
+                        if (data.reload) setTimeout(() => window.location.reload(), 1000);
                     } else { showAlert(data.message, 'danger'); }
                 })
                 .catch(err => showAlert('An unexpected error occurred.', 'danger'));

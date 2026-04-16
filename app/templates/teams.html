@@ -86,9 +86,19 @@
                                             <a href="{{ url_for('main.team_members', team_id=team.id) }}" class="btn btn-sm btn-outline-primary" title="Manage Members">
                                                 <i class="bi bi-person-lines-fill"></i>
                                             </a>
+                                            <button class="btn btn-sm btn-outline-secondary rename-team-btn" title="Rename"
+                                                    data-url="{{ url_for('main.rename_team', team_id=team.id) }}"
+                                                    data-name="{{ team.name }}">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <form action="{{ url_for('main.clone_team', team_id=team.id) }}" method="POST"
+                                                  class="d-inline clone-team-form">
+                                                <button class="btn btn-sm btn-outline-info" title="Clone">
+                                                    <i class="bi bi-files"></i>
+                                                </button>
+                                            </form>
                                             <form action="{{ url_for('main.delete_team', team_id=team.id) }}" method="POST"
-                                                  class="d-inline delete-team-form"
-                                                  onsubmit="return confirm('Delete team {{ team.name }} and all its members?');">
+                                                  class="d-inline delete-team-form">
                                                 <button class="btn btn-sm btn-outline-danger" title="Delete">
                                                     <i class="bi bi-trash"></i>
                                                 </button>

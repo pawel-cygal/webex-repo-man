@@ -312,6 +312,48 @@ def delete_team(team_id):
         return jsonify({'success': False, 'message': 'Error deleting team.'}), 500
 
 
+@main.route('/teams/<int:team_id>/rename', methods=['POST'])
+def rename_team(team_id):
+    team = Team.query.get_or_404(team_id)
+    try:
+        new_name = (request.form.get('name') or '').strip()
+        if not new_name:
+            return jsonify({'success': False, 'message': 'Name is required.'}), 400
+        if Team.query.filter(Team.name == new_name, Team.id != team.id).first():
+            return jsonify({'success': False, 'message': 'A team with this name already exists.'}), 400
+        team.name = new_name
+        db.session.commit()
+        return jsonify({'success': True, 'message': f"Team renamed to '{new_name}'.", 'reload': True})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error renaming team: {e}")
+        return jsonify({'success': False, 'message': 'Error renaming team.'}), 500
+
+
+@main.route('/teams/<int:team_id>/clone', methods=['POST'])
+def clone_team(team_id):
+    source = Team.query.get_or_404(team_id)
+    try:
+        copy_name = f"{source.name} (copy)"
+        if Team.query.filter_by(name=copy_name).first():
+            copy_name = f"{source.name} (copy {source.id})"
+        copy = Team(name=copy_name, owner_id=current_user.id)
+        db.session.add(copy)
+        db.session.flush()
+        for m in source.members:
+            db.session.add(TeamMember(team_id=copy.id, email=m.email, display_name=m.display_name))
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f"Team '{source.name}' cloned as '{copy_name}' with {len(source.members)} members.",
+            'reload': True,
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error cloning team: {e}")
+        return jsonify({'success': False, 'message': 'Error cloning team.'}), 500
+
+
 @main.route('/teams/<int:team_id>/members/list')
 def team_members_json(team_id):
     team = Team.query.get_or_404(team_id)
