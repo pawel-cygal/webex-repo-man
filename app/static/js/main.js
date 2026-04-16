@@ -177,6 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <td class="text-end">
                 <div class="btn-group">
                     <form action="${job.urls.run_now}" method="POST" class="d-inline run-now-form"><button type="submit" class="btn btn-sm btn-outline-secondary" title="Run Now"><i class="bi bi-play-fill"></i></button></form>
+                    <a href="${job.urls.history}" class="btn btn-sm btn-outline-secondary" title="History"><i class="bi bi-clock-history"></i></a>
                     <a href="${job.urls.edit}" class="btn btn-sm btn-outline-primary" title="Edit"><i class="bi bi-pencil"></i></a>
                     <form action="${job.urls.clone}" method="POST" class="d-inline clone-job-form"><button type="submit" class="btn btn-sm btn-outline-info" title="Clone"><i class="bi bi-files"></i></button></form>
                     <form action="${job.urls.delete}" method="POST" class="d-inline delete-job-form"><button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button></form>

@@ -4,7 +4,7 @@ from . import main
 from flask import render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
 from .. import db
-from ..models import ScheduledJob, WebexChannel
+from ..models import ScheduledJob, WebexChannel, JobLog
 from ..scheduler.jobs import send_scheduled_message
 
 
@@ -217,7 +217,7 @@ def run_now(job_id):
     try:
         # We need the app object to pass to the function
         app = current_app._get_current_object()
-        send_scheduled_message(app, job.id)
+        send_scheduled_message(app, job.id, trigger_type='manual')
         # The job object is updated in send_scheduled_message, so we can serialize it
         return jsonify({
             'success': True, 
@@ -227,3 +227,13 @@ def run_now(job_id):
     except Exception as e:
         current_app.logger.error(f"Error running job '{job.name}' manually: {e}")
         return jsonify({'success': False, 'message': f"Error running job '{job.name}'. Check logs for details."}), 500
+
+
+@main.route('/job/<int:job_id>/history')
+def job_history(job_id):
+    job = ScheduledJob.query.get_or_404(job_id)
+    page = request.args.get('page', 1, type=int)
+    logs = JobLog.query.filter_by(job_id=job.id)\
+        .order_by(JobLog.executed_at.desc())\
+        .paginate(page=page, per_page=50, error_out=False)
+    return render_template('job_history.html', job=job, logs=logs)

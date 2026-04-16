@@ -50,6 +50,24 @@ class AppSetting(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class JobLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey('scheduled_job.id'), nullable=False)
+    executed_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    success = db.Column(db.Boolean, nullable=False)
+    error_message = db.Column(db.Text, nullable=True)
+    trigger_type = db.Column(db.String(20), default='scheduled')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'executed_at': self.executed_at.strftime('%Y-%m-%d %H:%M:%S') if self.executed_at else None,
+            'success': self.success,
+            'error_message': self.error_message,
+            'trigger_type': self.trigger_type,
+        }
+
+
 class WebexChannel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), unique=True, nullable=False)
@@ -78,6 +96,8 @@ class ScheduledJob(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     last_run = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    logs = db.relationship('JobLog', backref='job', lazy='dynamic', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<ScheduledJob {self.name}>'
@@ -116,6 +136,7 @@ class ScheduledJob(db.Model):
                 'run_now': url_for('main.run_now', job_id=self.id),
                 'edit': url_for('main.edit_job', job_id=self.id),
                 'delete': url_for('main.delete_job', job_id=self.id),
-                'clone': url_for('main.clone_job', job_id=self.id)
+                'clone': url_for('main.clone_job', job_id=self.id),
+                'history': url_for('main.job_history', job_id=self.id)
             }
         }

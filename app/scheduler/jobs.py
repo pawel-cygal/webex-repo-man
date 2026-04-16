@@ -6,14 +6,14 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from webexteamssdk import WebexTeamsAPI
 from .. import db
-from ..models import ScheduledJob
+from ..models import ScheduledJob, JobLog
 
 _scheduler = None
 _job_hashes = {}
 RECONCILE_JOB_ID = '_reconcile'
 
 
-def send_scheduled_message(app, job_id):
+def send_scheduled_message(app, job_id, trigger_type='scheduled'):
     with app.app_context():
         app.logger.info(f"Running job ID: {job_id}")
         job = ScheduledJob.query.get(job_id)
@@ -36,12 +36,15 @@ def send_scheduled_message(app, job_id):
             api.messages.create(roomId=job.channel.room_id, markdown=message_to_send)
 
             job.last_run = datetime.utcnow()
+            db.session.add(JobLog(job_id=job.id, success=True, trigger_type=trigger_type))
             db.session.commit()
 
             app.logger.info(f"Successfully sent message for job: {job.name}")
 
         except Exception as e:
             app.logger.error(f"Error sending message for job {job.id}: {e}")
+            db.session.add(JobLog(job_id=job.id, success=False, error_message=str(e), trigger_type=trigger_type))
+            db.session.commit()
 
 
 def _job_config_hash(job):
