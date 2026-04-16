@@ -18,6 +18,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const channelList = document.getElementById('channel-list');
     if (channelList) channelList.addEventListener('submit', handleDelegatedSubmit);
 
+    // --- Search & Sort ---
+    setupTableSearch('job-search', 'jobs-table-body');
+    setupListSearch('channel-search', 'channel-list');
+    setupSortableTable('jobs-table');
+
     // --- Display session alerts ---
     const alertMessage = sessionStorage.getItem('alertMessage');
     const alertCategory = sessionStorage.getItem('alertCategory');
@@ -176,6 +181,58 @@ document.addEventListener('DOMContentLoaded', function() {
             </td>
         `;
         row.insertAdjacentHTML('afterbegin', html);
+    }
+
+    function setupTableSearch(inputId, tbodyId) {
+        const input = document.getElementById(inputId);
+        const tbody = document.getElementById(tbodyId);
+        if (!input || !tbody) return;
+        input.addEventListener('input', () => {
+            const q = input.value.trim().toLowerCase();
+            for (const row of tbody.rows) {
+                if (row.querySelector('td[colspan]')) continue;
+                row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+            }
+        });
+    }
+
+    function setupListSearch(inputId, listId) {
+        const input = document.getElementById(inputId);
+        const list = document.getElementById(listId);
+        if (!input || !list) return;
+        input.addEventListener('input', () => {
+            const q = input.value.trim().toLowerCase();
+            for (const item of list.children) {
+                item.style.display = !q || item.textContent.toLowerCase().includes(q) ? '' : 'none';
+            }
+        });
+    }
+
+    function setupSortableTable(tableId) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        const headers = table.querySelectorAll('thead th.sortable');
+        headers.forEach((th, idx) => {
+            th.addEventListener('click', () => sortTableBy(table, th, idx));
+        });
+    }
+
+    function sortTableBy(table, th, colIdx) {
+        const tbody = table.tBodies[0];
+        const rows = Array.from(tbody.rows).filter(r => !r.querySelector('td[colspan]'));
+        if (!rows.length) return;
+
+        const isAsc = !th.classList.contains('sort-asc');
+        table.querySelectorAll('thead th').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+        th.classList.add(isAsc ? 'sort-asc' : 'sort-desc');
+
+        rows.sort((a, b) => {
+            const av = (a.cells[colIdx]?.textContent || '').trim().toLowerCase();
+            const bv = (b.cells[colIdx]?.textContent || '').trim().toLowerCase();
+            if (av === bv) return 0;
+            return (av < bv ? -1 : 1) * (isAsc ? 1 : -1);
+        });
+        rows.forEach(r => tbody.appendChild(r));
     }
 
     function showAlert(message, category = 'primary') {
