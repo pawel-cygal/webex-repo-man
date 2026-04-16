@@ -11,12 +11,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const editJobForm = document.getElementById('edit-job-form');
     if (editJobForm) editJobForm.addEventListener('submit', handleFormSubmit);
 
+    const addTeamForm = document.getElementById('add-team-form');
+    if (addTeamForm) addTeamForm.addEventListener('submit', handleFormSubmit);
+
+    const addMemberForm = document.getElementById('add-member-form');
+    if (addMemberForm) addMemberForm.addEventListener('submit', handleFormSubmit);
+
     // --- Event Delegation ---
     const jobsTableBody = document.getElementById('jobs-table-body');
     if (jobsTableBody) jobsTableBody.addEventListener('submit', handleDelegatedSubmit);
 
     const channelList = document.getElementById('channel-list');
     if (channelList) channelList.addEventListener('submit', handleDelegatedSubmit);
+
+    // Delegate for team/member pages (forms live in table bodies)
+    document.body.addEventListener('submit', function(event) {
+        const form = event.target;
+        if (form.matches('.delete-team-form') || form.matches('.delete-member-form')) {
+            handleDelegatedSubmit(event);
+        }
+    });
 
     // --- Delivery Mode Toggle ---
     setupDeliveryMode();
@@ -132,6 +146,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.success) {
                         addJobRow(data.job);
                         showAlert(data.message, 'success');
+                    } else { showAlert(data.message, 'danger'); }
+                })
+                .catch(err => showAlert('An unexpected error occurred.', 'danger'));
+        }
+
+        if (form.matches('.delete-team-form') || form.matches('.delete-member-form')) {
+            event.preventDefault();
+            if (form.matches('.delete-team-form') && !confirm('Are you sure?')) return;
+            fetch(form.action, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(data.message, 'success');
+                        if (data.reload) setTimeout(() => window.location.reload(), 1000);
                     } else { showAlert(data.message, 'danger'); }
                 })
                 .catch(err => showAlert('An unexpected error occurred.', 'danger'));
