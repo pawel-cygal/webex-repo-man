@@ -49,14 +49,33 @@ def _job_config_hash(job):
     return hashlib.md5(key.encode()).hexdigest()
 
 
+_LEGACY_TZ_MAP = {
+    'US/Eastern': 'America/New_York',
+    'US/Central': 'America/Chicago',
+    'US/Mountain': 'America/Denver',
+    'US/Pacific': 'America/Los_Angeles',
+    'US/Alaska': 'America/Anchorage',
+    'US/Hawaii': 'Pacific/Honolulu',
+    'US/Arizona': 'America/Phoenix',
+    'Canada/Eastern': 'America/Toronto',
+    'Canada/Central': 'America/Winnipeg',
+    'Canada/Pacific': 'America/Vancouver',
+}
+
+
+def _normalize_tz(tz_name):
+    return _LEGACY_TZ_MAP.get(tz_name, tz_name)
+
+
 def _build_trigger(job):
     hour, minute = map(int, job.schedule_time.split(':'))
     day_of_week = '*' if job.frequency == 'daily' else job.frequency[:3]
+    tz_name = _normalize_tz(job.timezone)
     return CronTrigger(
         day_of_week=day_of_week,
         hour=hour,
         minute=minute,
-        timezone=pytz.timezone(job.timezone),
+        timezone=pytz.timezone(tz_name),
     )
 
 
