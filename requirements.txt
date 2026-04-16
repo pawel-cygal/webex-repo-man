@@ -8,6 +8,7 @@ Flask-WTF
 Flask-Migrate
 Flask-Login
 cryptography
+requests
 gunicorn
 
 # Scheduler

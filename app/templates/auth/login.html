@@ -21,6 +21,19 @@
 
     <div class="card shadow-sm">
         <div class="card-body">
+            {% if webex_enabled %}
+            <a href="{{ url_for('auth.webex_start') }}" class="btn btn-success w-100 mb-3">
+                <i class="bi bi-chat-dots-fill"></i> Sign in with Webex
+            </a>
+            {% endif %}
+
+            {% if webex_enabled and local_enabled %}
+            <div class="d-flex align-items-center my-3 text-muted">
+                <hr class="flex-grow-1"><span class="mx-2 small">or</span><hr class="flex-grow-1">
+            </div>
+            {% endif %}
+
+            {% if local_enabled %}
             <form method="POST" action="{{ url_for('auth.login') }}">
                 <div class="mb-3">
                     <label for="email" class="form-label">Email</label>
@@ -37,6 +50,11 @@
                 </div>
                 <button type="submit" class="btn btn-primary w-100">Sign in</button>
             </form>
+            {% elif not webex_enabled %}
+            <div class="alert alert-warning mb-0">
+                No sign-in method is available. Contact the administrator.
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
