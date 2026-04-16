@@ -79,6 +79,41 @@ def _build_trigger(job):
     )
 
 
+def _preflight_check(app, job):
+    """
+    Validate everything needed to deliver a job's message.
+    Returns (ok: bool, issues: list[str]).
+    """
+    issues = []
+
+    # 1. Timezone
+    tz_name = _normalize_tz(job.timezone)
+    try:
+        pytz.timezone(tz_name)
+    except pytz.UnknownTimeZoneError:
+        issues.append(f"unknown timezone '{job.timezone}' (normalized: '{tz_name}')")
+
+    # 2. Channel
+    if not job.channel:
+        issues.append("no channel linked")
+    elif not job.channel.room_id:
+        issues.append(f"channel '{job.channel.name}' has no room_id")
+
+    # 3. Bot token
+    if not app.config.get('WEBEX_BOT_TOKEN'):
+        issues.append("WEBEX_BOT_TOKEN is not configured")
+
+    # 4. Schedule time format
+    try:
+        h, m = map(int, job.schedule_time.split(':'))
+        if not (0 <= h <= 23 and 0 <= m <= 59):
+            raise ValueError
+    except (ValueError, AttributeError):
+        issues.append(f"invalid schedule_time '{job.schedule_time}'")
+
+    return len(issues) == 0, issues
+
+
 def _reconcile(app):
     """
     Sync APScheduler state to match active jobs in the database.
@@ -89,27 +124,51 @@ def _reconcile(app):
     with app.app_context():
         try:
             jobs = ScheduledJob.query.filter_by(is_active=True).all()
+
             desired_ids = set()
             new_hashes = {}
             changes = 0
+            failed_ids = set()
+
+            for job in jobs:
+                ok, issues = _preflight_check(app, job)
+                if not ok:
+                    for issue in issues:
+                        app.logger.error(
+                            f"Preflight FAIL job '{job.name}' (id={job.id}): {issue}"
+                        )
+                    failed_ids.add(job.id)
 
             for job in jobs:
                 sched_id = f"job_{job.id}"
                 desired_ids.add(sched_id)
+
+                if job.id in failed_ids:
+                    continue
+
                 h = _job_config_hash(job)
                 new_hashes[sched_id] = h
 
                 if _job_hashes.get(sched_id) == h:
                     continue
 
+                trigger = _build_trigger(job)
                 _scheduler.add_job(
                     send_scheduled_message,
-                    trigger=_build_trigger(job),
+                    trigger=trigger,
                     args=[app, job.id],
                     id=sched_id,
                     name=job.name,
                     replace_existing=True,
                     misfire_grace_time=3600,
+                )
+                tz_name = _normalize_tz(job.timezone)
+                next_fire = trigger.get_next_fire_time(None, datetime.now(pytz.UTC))
+                app.logger.info(
+                    f"Scheduled job '{job.name}' (id={job.id}): "
+                    f"{job.frequency} at {job.schedule_time} {job.timezone}"
+                    f"{' -> ' + tz_name if tz_name != job.timezone else ''}"
+                    f", next fire: {next_fire}"
                 )
                 changes += 1
 
@@ -123,11 +182,25 @@ def _reconcile(app):
 
             _job_hashes = new_hashes
 
+            queued = len([j for j in _scheduler.get_jobs() if j.id != RECONCILE_JOB_ID])
+            passed = len(jobs) - len(failed_ids)
+            if failed_ids:
+                app.logger.warning(
+                    f"Preflight: {passed}/{len(jobs)} jobs OK, "
+                    f"{len(failed_ids)} FAILED validation."
+                )
+            else:
+                app.logger.info(
+                    f"Preflight: all {len(jobs)} job(s) passed validation."
+                )
+
             if changes or removed:
                 app.logger.info(
                     f"Scheduler reconciled: {changes} added/updated, "
-                    f"{removed} removed, {len(jobs)} total active."
+                    f"{removed} removed, {queued} in queue."
                 )
+            else:
+                app.logger.info(f"Scheduler: no changes, {queued} job(s) in queue.")
 
         except Exception as e:
             app.logger.error(f"Error reconciling scheduler: {e}")
