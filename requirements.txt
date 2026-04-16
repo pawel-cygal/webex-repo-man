@@ -6,6 +6,8 @@ Flask
 Flask-SQLAlchemy
 Flask-WTF
 Flask-Migrate
+Flask-Login
+cryptography
 gunicorn
 
 # Scheduler

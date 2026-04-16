@@ -2,39 +2,79 @@
 from . import db
 from datetime import datetime
 from flask import url_for
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    display_name = db.Column(db.String(255), nullable=True)
+    password_hash = db.Column(db.String(255), nullable=True)
+    webex_id = db.Column(db.String(255), unique=True, nullable=True)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    is_super_admin = db.Column(db.Boolean, default=False, nullable=False)
+    is_active_flag = db.Column('is_active', db.Boolean, default=True, nullable=False)
+    must_change_password = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    channels = db.relationship('WebexChannel', backref='owner', lazy=True)
+    jobs = db.relationship('ScheduledJob', backref='owner', lazy=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, password)
+
+    @property
+    def is_active(self):
+        return self.is_active_flag
+
+    def display(self):
+        return self.display_name or self.email
+
+    def __repr__(self):
+        return f'<User {self.email}>'
+
+
+class AppSetting(db.Model):
+    """
+    Simple key/value store for application-wide configuration
+    (auth mode, Webex OAuth credentials, etc.). Edited by super admin.
+    """
+    key = db.Column(db.String(64), primary_key=True)
+    value = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 
 class WebexChannel(db.Model):
-    """
-    Represents a Webex room/channel saved by the user.
-    """
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), unique=True, nullable=False)
     room_id = db.Column(db.String(256), unique=True, nullable=False)
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     jobs = db.relationship('ScheduledJob', backref='channel', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<WebexChannel {self.name}>'
 
+
 class ScheduledJob(db.Model):
-    """
-    Represents a scheduled message job defined by the user.
-    """
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False)
     message = db.Column(db.Text, nullable=False)
-    
-    # Foreign Key to WebexChannel
+
     channel_id = db.Column(db.Integer, db.ForeignKey('webex_channel.id'), nullable=False)
-    
-    # Schedule properties
-    schedule_time = db.Column(db.String(5), nullable=False) # e.g., "09:00"
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    schedule_time = db.Column(db.String(5), nullable=False)
     timezone = db.Column(db.String(64), nullable=False, default='UTC')
-    frequency = db.Column(db.String(20), nullable=False, default='daily') # e.g., 'daily', 'monday', 'saturday'
-    
-    # Mentions - stored as a simple comma-separated string of emails
+    frequency = db.Column(db.String(20), nullable=False, default='daily')
+
     mentions = db.Column(db.String(1024), nullable=True)
-    
-    # State tracking
+
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     last_run = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -43,9 +83,6 @@ class ScheduledJob(db.Model):
         return f'<ScheduledJob {self.name}>'
 
     def to_dict(self):
-        """
-        Serializes the object to a dictionary.
-        """
         return {
             'id': self.id,
             'name': self.name,
@@ -55,6 +92,7 @@ class ScheduledJob(db.Model):
                 'name': self.channel.name,
                 'room_id': self.channel.room_id
             },
+            'owner': self.owner.display() if self.owner else None,
             'schedule_time': self.schedule_time,
             'timezone': self.timezone,
             'frequency': self.frequency,

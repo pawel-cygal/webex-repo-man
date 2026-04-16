@@ -13,6 +13,18 @@
             <a class="navbar-brand" href="/">
                 <i class="bi bi-robot"></i> Webex Repo Man
             </a>
+            {% if current_user.is_authenticated %}
+            <div class="d-flex align-items-center">
+                <span class="navbar-text me-3">
+                    <i class="bi bi-person-circle"></i> {{ current_user.display() }}
+                </span>
+                <form method="POST" action="{{ url_for('auth.logout') }}" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-light">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </button>
+                </form>
+            </div>
+            {% endif %}
         </div>
     </nav>
 

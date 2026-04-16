@@ -2,9 +2,18 @@
 import pytz
 from . import main
 from flask import render_template, request, redirect, url_for, flash, current_app, jsonify
+from flask_login import login_required, current_user
 from .. import db
 from ..models import ScheduledJob, WebexChannel
 from ..scheduler.jobs import send_scheduled_message
+
+
+@main.before_request
+@login_required
+def require_login():
+    """Every route in this blueprint requires authentication."""
+    pass
+
 
 @main.route('/')
 def index():
@@ -31,7 +40,7 @@ def add_channel():
         if WebexChannel.query.filter_by(name=name).first() or WebexChannel.query.filter_by(room_id=room_id).first():
             return jsonify({'success': False, 'message': 'A channel with this name or Room ID already exists.'}), 400
 
-        new_channel = WebexChannel(name=name, room_id=room_id)
+        new_channel = WebexChannel(name=name, room_id=room_id, owner_id=current_user.id)
         db.session.add(new_channel)
         db.session.commit()
         return jsonify({
@@ -88,7 +97,8 @@ def add_job():
             schedule_time=schedule_time,
             timezone=timezone,
             mentions=mentions,
-            is_active=True
+            is_active=True,
+            owner_id=current_user.id,
         )
         db.session.add(new_job)
         db.session.commit()
@@ -168,6 +178,7 @@ def clone_job(job_id):
             timezone=source.timezone,
             mentions=source.mentions,
             is_active=False,
+            owner_id=current_user.id,
         )
         db.session.add(copy)
         db.session.commit()
