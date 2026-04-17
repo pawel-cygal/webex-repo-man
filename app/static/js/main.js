@@ -221,8 +221,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (emptyCell) emptyCell.parentElement.remove();
 
         const name = escapeHtml(job.name);
-        const channelName = escapeHtml(job.channel.name);
-        const roomId = escapeHtml(job.channel.room_id);
+        let targetCell;
+        if (job.delivery_mode === 'private' && job.team) {
+            targetCell = '<i class="bi bi-envelope"></i> ' + escapeHtml(job.team.name);
+        } else if (job.channel) {
+            targetCell = '<a href="#" title="Room ID: ' + escapeHtml(job.channel.room_id) + '">' + escapeHtml(job.channel.name) + '</a>';
+        } else {
+            targetCell = '<span class="text-muted">&mdash;</span>';
+        }
         const freq = escapeHtml(job.frequency_display);
         const time = escapeHtml(job.schedule_time);
         const tz = escapeHtml(job.timezone);
@@ -237,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
         row.id = `job-row-${job.id}`;
         const html = `
             <td>${name}</td>
-            <td><a href="#" title="Room ID: ${roomId}">${channelName}</a></td>
+            <td>${targetCell}</td>
             <td>${ownerCell}</td>
             <td>${freq} at ${time} (${tz})</td>
             <td><span class="badge text-bg-${statusClass}">${statusLabel}</span></td>
